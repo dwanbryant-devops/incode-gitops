@@ -31,7 +31,7 @@ Every ApplicationSet uses the **cluster generator**. It creates one Application 
 | `bootstrap/workloads/realworld.yaml` | The app. Its namespace is created with Pod Security `restricted` enforced. |
 | `values/addons/` | Shared add-on Helm values. |
 | `values/<env>/realworld.yaml` | Per-environment app values. **Image tags live here; CI bumps them.** |
-| `charts/platform-config` | Default `gp3` StorageClass, encrypted and tagged `Backup=daily` so AWS Backup covers every PV. Also the `ClusterSecretStore`, limited to the `realworld` namespace. |
+| `charts/platform-config` | Default `gp3` StorageClass, encrypted and tagged `Backup=incode-daily` so the DLM snapshot policy covers every PV. The `ClusterSecretStore`, limited to the `realworld` namespace. Stable Grafana admin credentials. |
 | `charts/realworld` | UI and API: Deployments, HPAs, PDBs, zone spreading, ExternalSecrets, the ALB Ingress, default-deny NetworkPolicies, ServiceMonitor, alerts, Grafana dashboard. |
 
 ## Deploy flow
@@ -65,7 +65,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 kubectl -n argocd port-forward svc/argo-cd-argocd-server 8080:80   # http://localhost:8080  (admin)
 
 # Grafana: http://<alb-dns>/grafana  (user admin)
-kubectl -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d
+kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
 
 # App URL
 kubectl -n realworld get ingress realworld -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
