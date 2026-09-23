@@ -6,11 +6,10 @@ api:
   autoscaling:
     minReplicas: 2
     maxReplicas: 6
-
 ui:
   image:
     repository: 839553328184.dkr.ecr.us-east-1.amazonaws.com/incode/ui
-    tag: "bootstrap"
+    tag: "217330e6b037"
   autoscaling:
     minReplicas: 2
     maxReplicas: 4
