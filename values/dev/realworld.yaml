@@ -2,7 +2,7 @@
 api:
   image:
     repository: 839553328184.dkr.ecr.us-east-1.amazonaws.com/incode/api
-    tag: "bootstrap"
+    tag: "34dc03e4a4a4"
   autoscaling:
     minReplicas: 2
     maxReplicas: 6
