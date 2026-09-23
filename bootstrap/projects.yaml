@@ -5,6 +5,9 @@ kind: AppProject
 metadata:
   name: platform
   namespace: argocd
+  annotations:
+    # Projects must exist before the ApplicationSets generate apps that reference them.
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   description: Cluster add-ons (ingress, autoscaling, secrets, logging, monitoring)
   sourceRepos: ["*"]
@@ -20,6 +23,8 @@ kind: AppProject
 metadata:
   name: realworld
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   description: RealWorld application (UI + API)
   sourceRepos:
