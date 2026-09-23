@@ -1,0 +1,54 @@
+# Defaults. Per-environment overrides: values/<env>/realworld.yaml.
+# AWS-specific values (DB host, secret ARNs, VPC CIDR, log bucket) are injected
+# by the ApplicationSet from the Argo CD cluster secret written by Terraform.
+
+vpcCidr: ""
+
+api:
+  image:
+    repository: ""
+    tag: ""
+  replicas: 2
+  port: 8080
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 256Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  extraEnv: {}
+
+ui:
+  image:
+    repository: ""
+    tag: ""
+  replicas: 2
+  port: 8080
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+
+database:
+  host: ""
+  port: "5432"
+  name: realworld
+  secretArn: "" # RDS-managed secret (JSON: username, password)
+
+cache:
+  secretArn: "" # empty = API runs without the cache tier
+
+ingress:
+  enabled: true
+  groupName: incode
+  accessLogsBucket: ""
+
+metrics:
+  serviceMonitor: true
+  dashboard: true

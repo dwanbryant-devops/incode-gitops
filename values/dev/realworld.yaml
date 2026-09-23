@@ -1,0 +1,16 @@
+# dev environment. Image tags are bumped by the app repos' CI pipelines.
+api:
+  image:
+    repository: 839553328184.dkr.ecr.us-east-1.amazonaws.com/incode/api
+    tag: "bootstrap"
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 6
+
+ui:
+  image:
+    repository: 839553328184.dkr.ecr.us-east-1.amazonaws.com/incode/ui
+    tag: "bootstrap"
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4

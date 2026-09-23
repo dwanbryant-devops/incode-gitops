@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: fluent-bit
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: "fluent-bit-{{ .metadata.annotations.environment }}"
+    spec:
+      project: platform
+      destination:
+        server: "{{ .server }}"
+        namespace: logging
+      sources:
+        - repoURL: https://fluent.github.io/helm-charts
+          chart: fluent-bit
+          targetRevision: 0.58.2
+          helm:
+            releaseName: fluent-bit
+            valueFiles:
+              - $values/values/addons/fluent-bit.yaml
+            valuesObject:
+              serviceAccount:
+                annotations:
+                  eks.amazonaws.com/role-arn: "{{ .metadata.annotations.fluent_bit_role_arn }}"
+              env:
+                - name: AWS_REGION
+                  value: "{{ .metadata.annotations.aws_region }}"
+                - name: LOG_GROUP_APP
+                  value: "{{ .metadata.annotations.log_group_app }}"
+                - name: LOG_GROUP_PLATFORM
+                  value: "{{ .metadata.annotations.log_group_platform }}"
+        - repoURL: "{{ .metadata.annotations.gitops_repo_url }}"
+          targetRevision: "{{ .metadata.annotations.gitops_revision }}"
+          ref: values
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true]
+        retry:
+          limit: 10
+          backoff: { duration: 15s, factor: 2, maxDuration: 5m }

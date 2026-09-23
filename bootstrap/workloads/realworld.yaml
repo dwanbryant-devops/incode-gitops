@@ -1,0 +1,56 @@
+# The RealWorld app, one Application per cluster/environment. Env-specific settings
+# (image tags, replicas) live in values/<env>/realworld.yaml; the app CI pipelines
+# bump image tags there. AWS values come from the cluster secret annotations.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: realworld
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: "realworld-{{ .metadata.annotations.environment }}"
+    spec:
+      project: realworld
+      destination:
+        server: "{{ .server }}"
+        namespace: realworld
+      sources:
+        - repoURL: "{{ .metadata.annotations.gitops_repo_url }}"
+          targetRevision: "{{ .metadata.annotations.gitops_revision }}"
+          path: charts/realworld
+          helm:
+            valueFiles:
+              - $values/values/{{ .metadata.annotations.environment }}/realworld.yaml
+            valuesObject:
+              vpcCidr: "{{ .metadata.annotations.vpc_cidr }}"
+              database:
+                host: "{{ .metadata.annotations.db_host }}"
+                port: "{{ .metadata.annotations.db_port }}"
+                name: "{{ .metadata.annotations.db_name }}"
+                secretArn: "{{ .metadata.annotations.db_secret_arn }}"
+              cache:
+                secretArn: "{{ .metadata.annotations.cache_secret_arn }}"
+              ingress:
+                accessLogsBucket: "{{ .metadata.annotations.alb_logs_bucket }}"
+        - repoURL: "{{ .metadata.annotations.gitops_repo_url }}"
+          targetRevision: "{{ .metadata.annotations.gitops_revision }}"
+          ref: values
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true]
+        managedNamespaceMetadata:
+          labels:
+            # Pods must meet the "restricted" Pod Security Standard.
+            pod-security.kubernetes.io/enforce: restricted
+            pod-security.kubernetes.io/audit: restricted
+        retry:
+          limit: 10
+          backoff: { duration: 15s, factor: 2, maxDuration: 5m }

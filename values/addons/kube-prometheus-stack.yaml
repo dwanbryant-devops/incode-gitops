@@ -1,0 +1,97 @@
+# Metrics tier: Prometheus (15 days of history on a gp3 volume backed up daily),
+# Grafana (Prometheus + CloudWatch data sources), Alertmanager, node-exporter,
+# kube-state-metrics.
+
+# EKS manages the control plane; these components can't be scraped.
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeEtcd: { enabled: false }
+kubeProxy: { enabled: false }
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 18GB
+    # Pick up ServiceMonitors/PodMonitors/rules from every namespace and chart.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    # Sized for t3.medium nodes (4 GiB); raise with more series/retention.
+    resources:
+      requests: { cpu: 200m, memory: 768Mi }
+      limits: { memory: 1536Mi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 20Gi
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+
+grafana:
+  # Reached at http://<alb>/grafana through the shared ALB (see ingress below).
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana"
+      serve_from_sub_path: true
+    auth.anonymous:
+      enabled: false
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 5Gi
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL # app charts ship their own dashboards as ConfigMaps
+    datasources:
+      enabled: true
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/group.name: incode
+      alb.ingress.kubernetes.io/group.order: "10"
+      alb.ingress.kubernetes.io/healthcheck-path: /grafana/api/health
+    path: /grafana
+    pathType: Prefix
+    hosts: []
+  # Community dashboards, pulled from grafana.com at startup.
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: aws
+          folder: AWS
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/aws
+  dashboards:
+    aws:
+      rds:
+        gnetId: 707 # AWS RDS (CloudWatch)
+        revision: 5
+        datasource: CloudWatch
+      alb:
+        gnetId: 650 # AWS ELB Application Load Balancer (CloudWatch)
+        revision: 5
+        datasource: CloudWatch
+      elasticache:
+        gnetId: 969 # AWS ElastiCache Redis (CloudWatch)
+        revision: 4
+        datasource: CloudWatch

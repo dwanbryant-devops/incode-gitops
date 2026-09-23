@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: "kube-prometheus-stack-{{ .metadata.annotations.environment }}"
+    spec:
+      project: platform
+      destination:
+        server: "{{ .server }}"
+        namespace: monitoring
+      sources:
+        - repoURL: https://prometheus-community.github.io/helm-charts
+          chart: kube-prometheus-stack
+          targetRevision: 91.5.0
+          helm:
+            releaseName: kube-prometheus-stack
+            valueFiles:
+              - $values/values/addons/kube-prometheus-stack.yaml
+            valuesObject:
+              grafana:
+                serviceAccount:
+                  name: grafana
+                  annotations:
+                    eks.amazonaws.com/role-arn: "{{ .metadata.annotations.grafana_role_arn }}"
+                additionalDataSources:
+                  - name: CloudWatch
+                    type: cloudwatch
+                    uid: cloudwatch
+                    jsonData:
+                      authType: default # IRSA web identity
+                      defaultRegion: "{{ .metadata.annotations.aws_region }}"
+        - repoURL: "{{ .metadata.annotations.gitops_repo_url }}"
+          targetRevision: "{{ .metadata.annotations.gitops_revision }}"
+          ref: values
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        # CRDs are too large for client-side apply annotations.
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 10
+          backoff: { duration: 15s, factor: 2, maxDuration: 5m }

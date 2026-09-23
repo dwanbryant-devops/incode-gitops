@@ -1,0 +1,69 @@
+{{- if .Values.metrics.serviceMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+# Service carries the selector label the ServiceMonitor matches on.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-metrics
+  labels:
+    {{- include "realworld.labels" . | nindent 4 }}
+    app.kubernetes.io/name: api
+spec:
+  selector: {{- include "realworld.selector" "api" | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.api.port }}
+      targetPort: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: api
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: realworld-api
+      rules:
+        - record: realworld:http_request_duration_seconds:p95
+          expr: histogram_quantile(0.95, sum by (le, route) (rate(http_request_duration_seconds_bucket{job="api-metrics"}[5m])))
+        - alert: RealWorldApiHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{job="api-metrics",status=~"5.."}[5m]))
+              / sum(rate(http_requests_total{job="api-metrics"}[5m])) > 0.05
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "API 5xx rate above 5% for 5 minutes"
+        - alert: RealWorldApiSlow
+          expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="api-metrics"}[5m]))) > 0.5
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "API p95 latency above 500ms for 10 minutes"
+{{- end }}
+{{- if .Values.metrics.dashboard }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: realworld-dashboard
+  labels:
+    {{- include "realworld.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  realworld.json: |-
+{{ .Files.Get "dashboards/realworld.json" | indent 4 }}
+{{- end }}

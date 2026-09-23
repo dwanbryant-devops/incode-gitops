@@ -1,0 +1,5 @@
+apiVersion: v2
+name: realworld
+description: RealWorld (Conduit) - Angular UI + Go/Gin API
+type: application
+version: 0.1.0

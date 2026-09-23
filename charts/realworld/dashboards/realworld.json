@@ -1,0 +1,102 @@
+{
+  "title": "RealWorld API",
+  "uid": "realworld-api",
+  "tags": ["realworld"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "prometheus" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requests / sec by route",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum by (route) (rate(http_requests_total{job=\"api-metrics\"}[5m]))", "legendFormat": "{{route}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "5xx error ratio",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{job=\"api-metrics\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"api-metrics\"}[5m]))", "legendFormat": "5xx" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency p50 / p95 / p99",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"api-metrics\"}[5m])))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"api-metrics\"}[5m])))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"api-metrics\"}[5m])))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 latency by route (find the slow endpoint)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "realworld:http_request_duration_seconds:p95", "legendFormat": "{{route}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DB connection pool (in use / idle / waiting)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(go_sql_in_use_connections{job=\"api-metrics\"})", "legendFormat": "in use" },
+        { "expr": "sum(go_sql_idle_connections{job=\"api-metrics\"})", "legendFormat": "idle" },
+        { "expr": "sum(rate(go_sql_wait_count_total{job=\"api-metrics\"}[5m]))", "legendFormat": "waits/s" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pods: CPU (cores) vs request",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"realworld\",container!=\"\"}[5m]))", "legendFormat": "{{pod}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Replicas (HPA current / desired)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"realworld\"}", "legendFormat": "{{horizontalpodautoscaler}} current" },
+        { "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"realworld\"}", "legendFormat": "{{horizontalpodautoscaler}} desired" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache hit ratio",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [
+        { "expr": "sum(rate(realworld_cache_requests_total{result=\"hit\"}[5m])) / sum(rate(realworld_cache_requests_total[5m]))", "legendFormat": "hit ratio" }
+      ]
+    }
+  ]
+}

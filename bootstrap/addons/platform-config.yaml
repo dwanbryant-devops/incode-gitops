@@ -1,0 +1,38 @@
+# Cluster-wide config that depends on add-on CRDs: the default gp3 StorageClass
+# (tagged for AWS Backup) and the ClusterSecretStore for AWS Secrets Manager.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-config
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: "platform-config-{{ .metadata.annotations.environment }}"
+    spec:
+      project: platform
+      destination:
+        server: "{{ .server }}"
+        namespace: external-secrets
+      source:
+        repoURL: "{{ .metadata.annotations.gitops_repo_url }}"
+        targetRevision: "{{ .metadata.annotations.gitops_revision }}"
+        path: charts/platform-config
+        helm:
+          valuesObject:
+            region: "{{ .metadata.annotations.aws_region }}"
+            project: incode
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        # The ClusterSecretStore CRD arrives with the external-secrets app; retry until it exists.
+        syncOptions: [SkipDryRunOnMissingResource=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 5m }

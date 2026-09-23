@@ -1,0 +1,37 @@
+# Two Argo CD projects: platform add-ons may touch anything; the app project is
+# fenced to its own namespace, this repo, and namespaced resources only.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Cluster add-ons (ingress, autoscaling, secrets, logging, monitoring)
+  sourceRepos: ["*"]
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: realworld
+  namespace: argocd
+spec:
+  description: RealWorld application (UI + API)
+  sourceRepos:
+    - https://github.com/dwanbryant-devops/incode-gitops.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: realworld
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: rbac.authorization.k8s.io
+      kind: "*"

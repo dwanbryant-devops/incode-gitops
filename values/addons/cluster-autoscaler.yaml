@@ -1,0 +1,16 @@
+cloudProvider: aws
+rbac:
+  serviceAccount:
+    create: true
+    name: cluster-autoscaler
+extraArgs:
+  balance-similar-node-groups: true
+  expander: least-waste
+  skip-nodes-with-local-storage: false
+  scale-down-unneeded-time: 5m
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 512Mi }
+serviceMonitor:
+  enabled: true
+  namespace: kube-system

@@ -1,0 +1,131 @@
+{{- $api := .Values.api -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    {{- include "realworld.labels" . | nindent 4 }}
+    {{- include "realworld.selector" "api" | nindent 4 }}
+spec:
+  {{- if not $api.autoscaling.enabled }}
+  replicas: {{ $api.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: {{- include "realworld.selector" "api" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "realworld.labels" . | nindent 8 }}
+        {{- include "realworld.selector" "api" | nindent 8 }}
+      annotations:
+        # Roll pods when the synced secrets change.
+        checksum/secrets: {{ printf "%s%s%s" .Values.database.secretArn .Values.database.host .Values.cache.secretArn | sha256sum | trunc 16 }}
+    spec:
+      serviceAccountName: api
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      {{- include "realworld.spread" "api" | nindent 6 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: "{{ $api.image.repository }}:{{ $api.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ $api.port }}
+          env:
+            - name: PORT
+              value: {{ $api.port | quote }}
+            - name: GIN_MODE
+              value: release
+            {{- range $k, $v := $api.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: api-database
+            - secretRef:
+                name: api-jwt
+            {{- if .Values.cache.secretArn }}
+            - secretRef:
+                name: api-cache
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /api/ping/, port: http }
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /api/ping/, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources: {{- toYaml $api.resources | nindent 12 }}
+          securityContext: {{- include "realworld.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /api/ping/
+spec:
+  selector: {{- include "realworld.selector" "api" | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{- include "realworld.selector" "api" | nindent 6 }}
+{{- if $api.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: {{ $api.autoscaling.minReplicas }}
+  maxReplicas: {{ $api.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $api.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

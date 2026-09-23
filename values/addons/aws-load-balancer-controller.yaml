@@ -1,0 +1,14 @@
+# clusterName, region, vpcId, and the IRSA role come from the ApplicationSet (cluster secret).
+replicaCount: 2
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+# Nodes block IMDS for pods (hop limit 1), so region/vpcId are passed explicitly.
+enableServiceMutatorWebhook: false
+podDisruptionBudget:
+  maxUnavailable: 1
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 256Mi }
+serviceMonitor:
+  enabled: true

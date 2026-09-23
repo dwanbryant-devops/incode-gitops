@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled }}
+{{- $lbAttrs := list "routing.http.drop_invalid_header_fields.enabled=true" "idle_timeout.timeout_seconds=60" }}
+{{- with .Values.ingress.accessLogsBucket }}
+{{- $lbAttrs = concat $lbAttrs (list "access_logs.s3.enabled=true" (printf "access_logs.s3.bucket=%s" .) "access_logs.s3.prefix=alb") }}
+{{- end }}
+# One internet-facing ALB shared (via group.name) with Grafana. Same origin for UI
+# and API, so no CORS. No domain yet -> HTTP only (see platform README: known gaps).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: realworld
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName }}
+    alb.ingress.kubernetes.io/group.order: "100"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/load-balancer-attributes: {{ join "," $lbAttrs | quote }}
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port: { name: http }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port: { name: http }
+{{- end }}

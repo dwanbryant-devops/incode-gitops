@@ -1,0 +1,107 @@
+{{- $ui := .Values.ui -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ui
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  labels:
+    {{- include "realworld.labels" . | nindent 4 }}
+    {{- include "realworld.selector" "ui" | nindent 4 }}
+spec:
+  {{- if not $ui.autoscaling.enabled }}
+  replicas: {{ $ui.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: {{- include "realworld.selector" "ui" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "realworld.labels" . | nindent 8 }}
+        {{- include "realworld.selector" "ui" | nindent 8 }}
+    spec:
+      serviceAccountName: ui
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      {{- include "realworld.spread" "ui" | nindent 6 }}
+      containers:
+        - name: ui
+          image: "{{ $ui.image.repository }}:{{ $ui.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ $ui.port }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: {{- toYaml $ui.resources | nindent 12 }}
+          securityContext: {{- include "realworld.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+spec:
+  selector: {{- include "realworld.selector" "ui" | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ui
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{- include "realworld.selector" "ui" | nindent 6 }}
+{{- if $ui.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ui
+  labels: {{- include "realworld.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ui
+  minReplicas: {{ $ui.autoscaling.minReplicas }}
+  maxReplicas: {{ $ui.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $ui.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
