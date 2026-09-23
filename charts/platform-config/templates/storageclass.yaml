@@ -1,5 +1,5 @@
 # Default StorageClass. Every volume it creates is encrypted and tagged so the
-# AWS Backup plan (tag Backup=daily + Project) picks it up automatically.
+# DLM snapshot policy in incode-platform (tag Backup=<project>-daily) picks it up.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -13,5 +13,5 @@ reclaimPolicy: Delete
 parameters:
   type: gp3
   encrypted: "true"
-  tagSpecification_1: "Backup=daily"
+  tagSpecification_1: "Backup={{ .Values.project }}-daily"
   tagSpecification_2: "Project={{ .Values.project }}"
