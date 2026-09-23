@@ -41,6 +41,12 @@ alertmanager:
               storage: 2Gi
 
 grafana:
+  # Admin credentials from a stable secret (platform-config chart), not the chart's
+  # per-render random password.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
   # Reached at http://<alb>/grafana through the shared ALB (see ingress below).
   grafana.ini:
     server:
